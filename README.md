@@ -54,12 +54,12 @@ Ensure you have [Node.js](https://nodejs.org/) installed, then follow these step
 
 2. **Install dependencies:**
    ```bash
-   pnpm install
+   bun install
    ```
 
 3. **Start the development server:**
    ```bash
-   pnpm run dev
+   bun run dev
    ```
    The application will boot up at `http://localhost:5173`.
 
