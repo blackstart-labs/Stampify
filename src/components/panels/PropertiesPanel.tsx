@@ -15,6 +15,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, Bold, Italic,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
+  RotateCw
 } from 'lucide-react';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
@@ -263,8 +264,18 @@ export const PropertiesPanel: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-2 mt-2">
-              <NumberField label="Rotation" value={Math.round(layer.rotation)} onChange={(v) => update({ rotation: v })} min={-360} max={360} />
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              <div className="flex items-end gap-1">
+                <NumberField label="Rotation" value={Math.round(layer.rotation)} onChange={(v) => update({ rotation: v })} min={-360} max={360} />
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  className="h-7 w-7 rounded-sm flex-shrink-0"
+                  title="Rotate 90°"
+                  onClick={() => updateWithHistory({ rotation: (layer.rotation + 90) % 360 })}
+                >
+                  <RotateCw size={12} />
+                </Button>
+              </div>
               {(layer.type === 'image' || (layer.type === 'shape' && (layer as any).shapeType === 'rectangle')) && (
                 <NumberField label="Radius" value={Math.round(layer.cornerRadius || 0)} onChange={(v) => update({ cornerRadius: v })} min={0} max={Math.min(layer.width, layer.height) / 2} />
               )}

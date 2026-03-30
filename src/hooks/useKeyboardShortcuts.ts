@@ -58,7 +58,7 @@ export function useKeyboardShortcuts() {
             return;
           case 'd':
             e.preventDefault();
-            selectedLayerIds.forEach((id) => duplicateLayer(id));
+            useCanvasStore.getState().duplicateLayers(selectedLayerIds);
             return;
           case 'a':
             if (!isInput) {
@@ -73,17 +73,17 @@ export function useKeyboardShortcuts() {
           case '[':
             e.preventDefault();
             if (e.shiftKey) {
-              selectedLayerIds.forEach((id) => moveLayerToBottom(id));
+              useCanvasStore.getState().moveLayers(selectedLayerIds, 'bottom');
             } else {
-              selectedLayerIds.forEach((id) => moveLayerDown(id));
+              useCanvasStore.getState().moveLayers(selectedLayerIds, 'down');
             }
             return;
           case ']':
             e.preventDefault();
             if (e.shiftKey) {
-              selectedLayerIds.forEach((id) => moveLayerToTop(id));
+              useCanvasStore.getState().moveLayers(selectedLayerIds, 'top');
             } else {
-              selectedLayerIds.forEach((id) => moveLayerUp(id));
+              useCanvasStore.getState().moveLayers(selectedLayerIds, 'up');
             }
             return;
           case '0':

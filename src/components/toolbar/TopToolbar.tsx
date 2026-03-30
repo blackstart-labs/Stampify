@@ -3,7 +3,8 @@
 import React, { useRef, useState } from 'react';
 import {
   Download, Upload, FilePlus, Save, Image as ImageIcon, Undo2, Redo2,
-  Sun, Moon, Link, FileJson, Layers, Settings
+  Sun, Moon, Link, FileJson, Layers, Settings, ChevronDown, Plus, FileText,
+  Grid3X3, Ruler
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,12 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -25,6 +32,7 @@ import { documentToTemplate, exportTemplateAsJSON, applyImagesToTemplate } from 
 import { fileToBase64 } from '@/utils/imageUtils';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
+
 interface TopToolbarProps {
   canvasStageRef?: React.RefObject<unknown>;
 }
@@ -33,7 +41,8 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
   const {
     document: doc, zoom, undo, redo, historyIndex, history,
     resetDocument, setDocumentName, exportSettings, setExportSettings,
-    setZoom, pendingBatchJob, setPendingBatchJob
+    setZoom, pendingBatchJob, setPendingBatchJob,
+    showGrid, setShowGrid, showRulers, setShowRulers
   } = useCanvasStore();
 
   const { importFromFiles, importFromUrl } = useImageImport();
@@ -49,7 +58,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
   const [newHeight, setNewHeight] = useState(1080);
   const [templateName, setTemplateName] = useState('');
   const [templateDesc, setTemplateDesc] = useState('');
-  
+
   // Batch Export State
   const [showBatchDialog, setShowBatchDialog] = useState(false);
   const [batchScaleMode, setBatchScaleMode] = useState<'stretch' | 'fit' | 'fill'>('stretch');
@@ -94,7 +103,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
     try {
       // Hide transformer temporarily
       useCanvasStore.getState().setSelectedLayers([]);
-      await new Promise(r => setTimeout(r, 50)); 
+      await new Promise(r => setTimeout(r, 50));
 
       const blob = await exportVisibleStage(
         stage,
@@ -154,14 +163,14 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
 
     const zip = new JSZip();
     const ext = format;
-    
+
     // Save original layers and selection
     const originalLayers = [...useCanvasStore.getState().document.layers];
     const originalSelection = [...useCanvasStore.getState().selectedLayerIds];
-    
+
     // Create template from current document if not provided
     const template = baseTemplate || documentToTemplate(doc, 'Batch Template', '', { ...exportSettings, format });
-    
+
     // Unselect to hide transformers during capture
     useCanvasStore.getState().setSelectedLayers([]);
 
@@ -169,17 +178,17 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
       const img = images[i];
       // Generate new layers based on template and this specific image
       const newLayers = applyImagesToTemplate(
-        template, 
+        template,
         [{ src: img.src, originalSrc: img.src, width: img.width, height: img.height }],
         scaleMode === 'stretch' ? undefined : scaleMode
       );
-      
+
       // Inject directly into store to force React/Konva to update the live canvas
       useCanvasStore.setState(s => ({ document: { ...s.document, layers: newLayers } }));
-      
+
       // High timeout to guarantee React re-renders and Konva loads the base64 image over the network
       await new Promise(r => setTimeout(r, 300));
-      
+
       try {
         const blob = await exportVisibleStage(
           stage,
@@ -195,14 +204,14 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
       } catch (err) {
         console.error(`Failed to batch process ${img.name}`, err);
       }
-      
+
       setBatchProgress(((i + 1) / images.length) * 100);
     }
 
     // Restore everything
-    useCanvasStore.setState(s => ({ 
+    useCanvasStore.setState(s => ({
       document: { ...s.document, layers: originalLayers },
-      selectedLayerIds: originalSelection 
+      selectedLayerIds: originalSelection
     }));
 
     if (images.length > 1) {
@@ -214,7 +223,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
         alert('Failed to generate ZIP archive.');
       }
     }
-    
+
     setIsBatchExporting(false);
     setShowBatchDialog(false);
   };
@@ -228,7 +237,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
       }, 500);
       return () => clearTimeout(timer);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingBatchJob, canvasStageRef]);
 
   const handleBatchExport = () => {
@@ -248,134 +257,137 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
 
   return (
     <>
-      <div className="h-11 bg-card border-b border-border flex items-center px-3 gap-2">
-        {/* Logo */}
-        <div className="flex items-center gap-2 mr-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+      <div className="h-10 bg-background border-b border-border flex items-center px-4 gap-4 sticky top-0 z-[60]">
+        {/* Left: Logo & Menu */}
+        <div className="flex items-center gap-1">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm">
             <Layers size={16} className="text-white" />
           </div>
-          <span className="text-sm font-bold tracking-tight text-foreground">
-            Stampify
-          </span>
+
+          <div className="flex items-center group ml-1 gap-1">
+            <Input
+              className="h-7 text-[13px] font-semibold bg-transparent border-transparent focus-visible:bg-muted/50 border-none px-1.5 py-0 w-[140px] transition-all cursor-text placeholder:text-muted-foreground/50 hover:bg-muted/30"
+              value={doc.name}
+              placeholder="Untitled Project"
+              onChange={(e) => setDocumentName(e.target.value)}
+            />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="w-6 h-6 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground">
+                  <ChevronDown size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56 mt-1 shadow-2xl">
+                <DropdownMenuItem onClick={() => setShowNewDialog(true)} className="gap-2 focus:bg-accent">
+                  <FilePlus size={14} /> New Project
+                </DropdownMenuItem>
+                <Separator className="my-1 opacity-50" />
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-2 focus:bg-accent">
+                  <Upload size={14} /> Import from Device
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowUrlDialog(true)} className="gap-2 focus:bg-accent">
+                  <Link size={14} /> Import from URL
+                </DropdownMenuItem>
+                <Separator className="my-1 opacity-50" />
+                <DropdownMenuItem onClick={() => setShowTemplateExport(true)} className="gap-2 focus:bg-accent">
+                  <FileJson size={14} /> Export as Template
+                </DropdownMenuItem>
+                <Separator className="my-1 opacity-50" />
+                <DropdownMenuItem onClick={toggleTheme} className="gap-2 focus:bg-accent">
+                  {isDark ? <Sun size={14} /> : <Moon size={14} />}
+                  Toggle {isDark ? 'Light' : 'Dark'} Mode
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-
-        <Separator orientation="vertical" className="h-6" />
-
-        {/* Document name */}
-        <Input
-          className="h-7 text-xs w-40 bg-transparent border-none focus-visible:ring-1"
-          value={doc.name}
-          onChange={(e) => setDocumentName(e.target.value)}
-          onFocus={(e) => e.target.select()}
-        />
-
-        <Separator orientation="vertical" className="h-6" />
-
-        {/* File actions */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => setShowNewDialog(true)} aria-label="New Project">
-              <FilePlus size={16} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent><p>New Project</p></TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => fileInputRef.current?.click()} aria-label="Import Image">
-              <Upload size={16} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent><p>Import Image</p></TooltipContent>
-        </Tooltip>
-        <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFileImport} />
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => setShowUrlDialog(true)} aria-label="Import from URL">
-              <Link size={16} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent><p>Import from URL</p></TooltipContent>
-        </Tooltip>
-
-        <Separator orientation="vertical" className="h-6" />
-
-        {/* Undo / Redo */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={undo} disabled={historyIndex < 0} aria-label="Undo">
-              <Undo2 size={16} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent><p>Undo (Ctrl+Z)</p></TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={redo} disabled={historyIndex >= history.length - 2} aria-label="Redo">
-              <Redo2 size={16} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent><p>Redo (Ctrl+Shift+Z)</p></TooltipContent>
-        </Tooltip>
 
         <div className="flex-1" />
 
-        {/* Zoom display */}
-        <span className="text-xs text-muted-foreground font-mono mr-2">
-          {Math.round(zoom * 100)}%
-        </span>
+        {/* Center: Undo/Redo & Zoom */}
+        <div className="flex items-center bg-muted/30 rounded-lg p-0.5 border border-border/50">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="w-8 h-8 rounded-md" onClick={undo} disabled={historyIndex < 0}>
+                <Undo2 size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Undo (Ctrl+Z)</p></TooltipContent>
+          </Tooltip>
 
-        <span className="text-[10px] text-muted-foreground">
-          {doc.width}×{doc.height}
-        </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="w-8 h-8 rounded-md" onClick={redo} disabled={historyIndex >= history.length - 2}>
+                <Redo2 size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Redo (Ctrl+Shift+Z)</p></TooltipContent>
+          </Tooltip>
 
-        <Separator orientation="vertical" className="h-6 mx-2" />
+          <div className="w-px h-4 bg-border mx-1" />
 
-        {/* Template export */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => setShowTemplateExport(true)} aria-label="Export Template">
-              <FileJson size={16} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent><p>Export Template</p></TooltipContent>
-        </Tooltip>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 gap-1 px-2 text-xs font-mono">
+                {Math.round(zoom * 100)}%
+                <ChevronDown size={10} className="text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {[0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4].map(z => (
+                <DropdownMenuItem key={z} onClick={() => setZoom(z)} className="text-xs font-mono">
+                  {Math.round(z * 100)}%
+                </DropdownMenuItem>
+              ))}
+              <Separator className="my-1" />
+              <DropdownMenuItem onClick={() => useCanvasStore.getState().triggerFitToScreen()} className="text-xs">
+                Fit to Screen (Ctrl+0)
+              </DropdownMenuItem>
+              <Separator className="my-1" />
+              <DropdownMenuItem className="gap-2 text-xs" onClick={() => setShowGrid(!showGrid)}>
+                <Grid3X3 size={14} className={showGrid ? 'text-blue-500' : ''} />
+                Show Grid
+                <span className="ml-auto text-[10px] text-muted-foreground">{showGrid ? 'On' : 'Off'}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2 text-xs" onClick={() => setShowRulers(!showRulers)}>
+                <Ruler size={14} className={showRulers ? 'text-blue-500' : ''} />
+                Show Rulers
+                <span className="ml-auto text-[10px] text-muted-foreground">Ctrl+R</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
-        {/* Theme toggle */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="w-8 h-8" onClick={toggleTheme} aria-label="Toggle Theme">
-              {isDark ? <Sun size={16} /> : <Moon size={16} />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent><p>Toggle Theme</p></TooltipContent>
-        </Tooltip>
+        <div className="flex-1" />
 
-        <Separator orientation="vertical" className="h-6 mx-2" />
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground mr-2 hidden sm:inline-block">
+            {doc.width}×{doc.height}
+          </span>
 
-        {/* Batch Export */}
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs gap-1 mr-1"
-          onClick={() => setShowBatchDialog(true)}
-        >
-          <Layers size={14} />
-          Batch
-        </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs gap-1 border-border/50 hover:bg-accent"
+            onClick={() => setShowBatchDialog(true)}
+          >
+            <Layers size={14} />
+            Batch
+          </Button>
 
-        {/* Export */}
-        <Button
-          size="sm"
-          className="h-7 text-xs gap-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white"
-          onClick={() => setShowExportDialog(true)}
-        >
-          <Download size={14} />
-          Export
-        </Button>
+          <Button
+            size="sm"
+            className="h-8 text-xs gap-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4"
+            onClick={() => setShowExportDialog(true)}
+          >
+            <Download size={14} />
+            Export
+          </Button>
+        </div>
+
+        <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFileImport} />
       </div>
 
       {/* URL Import Dialog */}
@@ -541,7 +553,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
                 <div className="text-sm font-medium text-center text-muted-foreground p-3 bg-muted rounded-md border border-border">
                   {batchImages.length} image(s) ready for batch processing
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <Label className="text-sm">Image Scaling</Label>
                   <Select value={batchScaleMode} onValueChange={(v: 'stretch' | 'fit' | 'fill') => setBatchScaleMode(v)}>

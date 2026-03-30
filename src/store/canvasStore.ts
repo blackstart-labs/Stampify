@@ -44,8 +44,10 @@ interface CanvasState {
   addLayer: (layer: Layer) => void;
   removeLayer: (id: string) => void;
   updateLayer: (id: string, updates: Partial<Layer>) => void;
-  reorderLayers: (fromIndex: number, toIndex: number) => void;
+  reorderLayers: (ids: string[], targetIndex: number) => void;
+  moveLayers: (ids: string[], direction: 'up' | 'down' | 'top' | 'bottom') => void;
   duplicateLayer: (id: string) => void;
+  duplicateLayers: (ids: string[]) => void;
   duplicateLayerExact: (id: string) => void;
   setSelectedLayers: (ids: string[]) => void;
   toggleLayerSelection: (id: string) => void;
@@ -157,38 +159,95 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }));
   },
 
-  reorderLayers: (fromIndex: number, toIndex: number) => {
+  reorderLayers: (ids: string[], targetIndex: number) => {
     const state = get();
     state.saveToHistory();
     set((s) => {
-      const layers = [...s.document.layers];
-      const [moved] = layers.splice(fromIndex, 1);
-      layers.splice(toIndex, 0, moved);
+      const allLayers = [...s.document.layers];
+      const movingLayers = allLayers.filter(l => ids.includes(l.id));
+      const remainingLayers = allLayers.filter(l => !ids.includes(l.id));
+      
+      const newLayers = [
+        ...remainingLayers.slice(0, targetIndex),
+        ...movingLayers,
+        ...remainingLayers.slice(targetIndex)
+      ];
+      
       return {
-        document: { ...s.document, layers, updatedAt: new Date().toISOString() },
+        document: { ...s.document, layers: newLayers, updatedAt: new Date().toISOString() },
+      };
+    });
+  },
+
+  moveLayers: (ids: string[], direction: 'up' | 'down' | 'top' | 'bottom') => {
+    const state = get();
+    const allLayers = state.document.layers;
+    const selectedIndices = ids
+      .map(id => allLayers.findIndex(l => l.id === id))
+      .filter(i => i !== -1)
+      .sort((a, b) => a - b);
+
+    if (selectedIndices.length === 0) return;
+
+    state.saveToHistory();
+    set(s => {
+      const layers = [...s.document.layers];
+      const selectedLayers = selectedIndices.map(i => layers[i]);
+      const otherLayers = layers.filter((_, i) => !selectedIndices.includes(i));
+
+      let newLayers = [...layers];
+
+      if (direction === 'top') {
+        newLayers = [...otherLayers, ...selectedLayers];
+      } else if (direction === 'bottom') {
+        newLayers = [...selectedLayers, ...otherLayers];
+      } else if (direction === 'up') {
+        const lastIndex = selectedIndices[selectedIndices.length - 1];
+        if (lastIndex < layers.length - 1) {
+          // target index is one above the highest selected index's relative position
+          const target = Math.min(layers.length - selectedLayers.length, selectedIndices[0] + 1);
+          newLayers = [...otherLayers];
+          newLayers.splice(target, 0, ...selectedLayers);
+        }
+      } else if (direction === 'down') {
+        if (selectedIndices[0] > 0) {
+          const target = Math.max(0, selectedIndices[0] - 1);
+          newLayers = [...otherLayers];
+          newLayers.splice(target, 0, ...selectedLayers);
+        }
+      }
+
+      return {
+        document: { ...s.document, layers: newLayers, updatedAt: new Date().toISOString() }
       };
     });
   },
 
   duplicateLayer: (id: string) => {
+    get().duplicateLayers([id]);
+  },
+
+  duplicateLayers: (ids: string[]) => {
     const state = get();
-    const layer = state.document.layers.find((l) => l.id === id);
-    if (!layer) return;
+    const layersToDuplicate = state.document.layers.filter(l => ids.includes(l.id));
+    if (layersToDuplicate.length === 0) return;
+
     state.saveToHistory();
-    const newLayer: Layer = {
+    const newLayers: Layer[] = layersToDuplicate.map(layer => ({
       ...JSON.parse(JSON.stringify(layer)),
       id: uuidv4(),
       name: `${layer.name} (copy)`,
       x: layer.x + 20,
       y: layer.y + 20,
-    };
+    }));
+
     set((s) => ({
       document: {
         ...s.document,
-        layers: [...s.document.layers, newLayer],
+        layers: [...s.document.layers, ...newLayers],
         updatedAt: new Date().toISOString(),
       },
-      selectedLayerIds: [newLayer.id],
+      selectedLayerIds: newLayers.map(l => l.id),
     }));
   },
 
@@ -398,35 +457,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   moveLayerUp: (id: string) => {
-    const state = get();
-    const idx = state.document.layers.findIndex((l) => l.id === id);
-    if (idx < state.document.layers.length - 1) {
-      state.reorderLayers(idx, idx + 1);
-    }
+    get().moveLayers([id], 'up');
   },
-
   moveLayerDown: (id: string) => {
-    const state = get();
-    const idx = state.document.layers.findIndex((l) => l.id === id);
-    if (idx > 0) {
-      state.reorderLayers(idx, idx - 1);
-    }
+    get().moveLayers([id], 'down');
   },
-
   moveLayerToTop: (id: string) => {
-    const state = get();
-    const idx = state.document.layers.findIndex((l) => l.id === id);
-    if (idx < state.document.layers.length - 1) {
-      state.reorderLayers(idx, state.document.layers.length - 1);
-    }
+    get().moveLayers([id], 'top');
   },
-
   moveLayerToBottom: (id: string) => {
-    const state = get();
-    const idx = state.document.layers.findIndex((l) => l.id === id);
-    if (idx > 0) {
-      state.reorderLayers(idx, 0);
-    }
+    get().moveLayers([id], 'bottom');
   },
 
   createClippingMask: () => {

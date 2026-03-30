@@ -1,30 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Eye, EyeOff, Lock, Unlock, Trash2, GripVertical,
-  Image, Type, Square, Droplets, Stamp, Smile, Search,
-  Copy, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  defaultDropAnimationSideEffects,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
+import { Search, Layers } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
 import { useCanvasStore } from '@/store/canvasStore';
-import type { Layer, LayerType } from '@/types';
-
-const layerIcons: Record<LayerType, React.ReactNode> = {
-  image: <Image size={14} />,
-  text: <Type size={14} />,
-  shape: <Square size={14} />,
-  watermark: <Stamp size={14} />,
-  blur: <Droplets size={14} />,
-  emoji: <Smile size={14} />,
-};
+import { SortableLayerItem } from './SortableLayerItem';
+import type { Layer } from '@/types';
 
 export const LayerPanel: React.FC = () => {
   const {
@@ -44,177 +41,80 @@ export const LayerPanel: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-  // Reverse layers for display (top layer first)
-  const displayLayers = [...doc.layers].reverse();
-  const filteredLayers = displayLayers.filter((l) =>
-    l.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
   );
 
-  const handleDragStart = (e: React.DragEvent, displayIndex: number) => {
-    setDraggedIndex(displayIndex);
-    e.dataTransfer.effectAllowed = 'move';
-  };
+  // Layers are stored bottom-to-top in state, but displayed top-to-bottom in UI
+  // UI Index 0 = Top Layer = last in doc.layers array
+  const displayLayers = useMemo(() => {
+    return [...doc.layers].reverse();
+  }, [doc.layers]);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = (e: React.DragEvent, targetDisplayIndex: number) => {
-    e.preventDefault();
-    if (draggedIndex === null || draggedIndex === targetDisplayIndex) return;
-
-    const fromActual = doc.layers.length - 1 - draggedIndex;
-    const toActual = doc.layers.length - 1 - targetDisplayIndex;
-    reorderLayers(fromActual, toActual);
-    setDraggedIndex(null);
-  };
-
-  const renderLayerItem = (layer: Layer, displayIndex: number) => {
-    const isSelected = selectedLayerIds.includes(layer.id);
-
-    return (
-      <ContextMenu key={layer.id}>
-        <ContextMenuTrigger>
-          <div
-            className={`group flex items-center gap-1 px-1.5 py-1 rounded-md cursor-pointer transition-colors text-xs
-              ${isSelected ? 'bg-primary/20 border border-primary/40' : 'hover:bg-accent border border-transparent'}
-              ${!layer.visible ? 'opacity-50' : ''}`}
-            onClick={(e) => {
-              if (e.ctrlKey) {
-                toggleLayerSelection(layer.id);
-              } else {
-                setSelectedLayers([layer.id]);
-              }
-            }}
-            draggable
-            onDragStart={(e) => handleDragStart(e, displayIndex)}
-            onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, displayIndex)}
-          >
-            <GripVertical size={12} className="text-muted-foreground cursor-grab flex-shrink-0" />
-
-            <span className="flex-shrink-0 text-muted-foreground">
-              {layerIcons[layer.type]}
-            </span>
-
-            {editingNameId === layer.id ? (
-              <Input
-                className="h-5 text-xs px-1 py-0 flex-1"
-                defaultValue={layer.name}
-                autoFocus
-                onBlur={(e) => {
-                  updateLayer(layer.id, { name: e.target.value });
-                  setEditingNameId(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    updateLayer(layer.id, { name: (e.target as HTMLInputElement).value });
-                    setEditingNameId(null);
-                  }
-                  if (e.key === 'Escape') setEditingNameId(null);
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span
-                className="flex-1 truncate"
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  setEditingNameId(layer.id);
-                }}
-              >
-                {layer.name}
-              </span>
-            )}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-5 h-5 flex-shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                updateLayer(layer.id, { visible: !layer.visible });
-              }}
-              aria-label={`Toggle visibility for ${layer.name}`}
-            >
-              {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-5 h-5 flex-shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                updateLayer(layer.id, { locked: !layer.locked });
-              }}
-              aria-label={`Toggle lock for ${layer.name}`}
-            >
-              {layer.locked ? <Lock size={12} /> : <Unlock size={12} />}
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-5 h-5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeLayer(layer.id);
-              }}
-              aria-label={`Delete ${layer.name}`}
-            >
-              <Trash2 size={12} />
-            </Button>
-          </div>
-        </ContextMenuTrigger>
-
-        <ContextMenuContent>
-          <ContextMenuItem onClick={() => duplicateLayer(layer.id)}>
-            <Copy size={14} className="mr-2" /> Duplicate
-          </ContextMenuItem>
-          <ContextMenuItem onClick={() => setEditingNameId(layer.id)}>
-            <Type size={14} className="mr-2" /> Rename
-          </ContextMenuItem>
-          <ContextMenuItem onClick={() => updateLayer(layer.id, { locked: !layer.locked })}>
-            {layer.locked ? <Unlock size={14} className="mr-2" /> : <Lock size={14} className="mr-2" />}
-            {layer.locked ? 'Unlock' : 'Lock'}
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => moveLayerToTop(layer.id)}>
-            <ChevronsUp size={14} className="mr-2" /> Move to Top
-          </ContextMenuItem>
-          <ContextMenuItem onClick={() => moveLayerUp(layer.id)}>
-            <ArrowUp size={14} className="mr-2" /> Move Up
-          </ContextMenuItem>
-          <ContextMenuItem onClick={() => moveLayerDown(layer.id)}>
-            <ArrowDown size={14} className="mr-2" /> Move Down
-          </ContextMenuItem>
-          <ContextMenuItem onClick={() => moveLayerToBottom(layer.id)}>
-            <ChevronsDown size={14} className="mr-2" /> Move to Bottom
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            className="text-destructive"
-            onClick={() => removeLayer(layer.id)}
-          >
-            <Trash2 size={14} className="mr-2" /> Delete
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
+  const filteredLayers = useMemo(() => {
+    return displayLayers.filter((l) =>
+      l.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
+  }, [displayLayers, searchQuery]);
+
+  const activeLayer = useMemo(() => 
+    filteredLayers.find((l) => l.id === activeId),
+    [filteredLayers, activeId]
+  );
+
+  const handleDragStart = (event: any) => {
+    setActiveId(event.active.id);
+  };
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      const oldIndex = displayLayers.findIndex((l) => l.id === active.id);
+      const newIndex = displayLayers.findIndex((l) => l.id === over.id);
+
+      // Convert UI indices (top-down) back to doc.layers indices (bottom-up)
+      const fromActual = doc.layers.length - 1 - oldIndex;
+      const toActual = doc.layers.length - 1 - newIndex;
+
+      // If multiple layers are selected, we move all of them
+      const selectedToMove = selectedLayerIds.includes(active.id as string) 
+        ? selectedLayerIds 
+        : [active.id as string];
+      
+      reorderLayers(selectedToMove, toActual);
+    }
+
+    setActiveId(null);
+  };
+
+  const dropAnimation = {
+    sideEffects: defaultDropAnimationSideEffects({
+      styles: {
+        active: {
+          opacity: '0.5',
+        },
+      },
+    }),
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-2 py-1.5 border-b border-border">
-        <div className="flex items-center gap-1">
-          <Search size={12} className="text-muted-foreground" />
+    <div className="flex flex-col h-full bg-card overflow-hidden">
+      <div className="px-2 py-2 border-b border-border">
+        <div className="relative group">
+          <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-blue-500 transition-colors" />
           <Input
             placeholder="Search layers..."
-            className="h-6 text-xs"
+            className="h-7 text-xs pl-7 bg-muted/30 border-transparent focus-visible:bg-muted/50 transition-all font-medium"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -222,26 +122,82 @@ export const LayerPanel: React.FC = () => {
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="p-1.5 space-y-0.5">
-          {filteredLayers.length === 0 ? (
-            <div className="text-center text-xs text-muted-foreground py-8">
-              {doc.layers.length === 0 ? (
-                <div>
-                  <p className="mb-1">No layers yet</p>
-                  <p className="text-[10px]">Import an image or add a layer to start</p>
+        <div className="p-2 space-y-0.5">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
+          >
+            <SortableContext
+              items={filteredLayers.map((l) => l.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {filteredLayers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+                    <Layers size={18} className="text-muted-foreground" />
+                  </div>
+                  <p className="text-xs font-semibold text-foreground/80">No layers found</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {doc.layers.length === 0 ? 'Start by adding a shape or text' : 'Try a different search term'}
+                  </p>
                 </div>
               ) : (
-                <p>No matching layers</p>
+                filteredLayers.map((layer) => (
+                  <SortableLayerItem
+                    key={layer.id}
+                    layer={layer}
+                    isSelected={selectedLayerIds.includes(layer.id)}
+                    editingNameId={editingNameId}
+                    setEditingNameId={setEditingNameId}
+                    toggleLayerSelection={toggleLayerSelection}
+                    setSelectedLayers={setSelectedLayers}
+                    updateLayer={updateLayer}
+                    removeLayer={removeLayer}
+                    duplicateLayer={duplicateLayer}
+                    moveLayerUp={moveLayerUp}
+                    moveLayerDown={moveLayerDown}
+                    moveLayerToTop={moveLayerToTop}
+                    moveLayerToBottom={moveLayerToBottom}
+                  />
+                ))
               )}
-            </div>
-          ) : (
-            filteredLayers.map((layer, i) => renderLayerItem(layer, i))
-          )}
+            </SortableContext>
+
+            <DragOverlay dropAnimation={dropAnimation}>
+              {activeLayer ? (
+                <div className="w-[calc(var(--radix-scroll-area-viewport-width)-1.5rem)] shadow-2xl scale-[1.02] transition-transform">
+                   <SortableLayerItem
+                    layer={activeLayer}
+                    isSelected={selectedLayerIds.includes(activeLayer.id)}
+                    editingNameId={null}
+                    setEditingNameId={() => {}}
+                    toggleLayerSelection={() => {}}
+                    setSelectedLayers={() => {}}
+                    updateLayer={() => {}}
+                    removeLayer={() => {}}
+                    duplicateLayer={() => {}}
+                    moveLayerUp={() => {}}
+                    moveLayerDown={() => {}}
+                    moveLayerToTop={() => {}}
+                    moveLayerToBottom={() => {}}
+                  />
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         </div>
       </ScrollArea>
 
-      <div className="px-2 py-1 border-t border-border text-[10px] text-muted-foreground text-center">
-        {doc.layers.length} layer{doc.layers.length !== 1 ? 's' : ''}
+      <div className="px-3 py-1.5 border-t border-border bg-muted/10 flex items-center justify-between">
+        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tight">
+          {doc.layers.length} Layers
+        </span>
+        <span className="text-[10px] font-mono text-muted-foreground">
+          {selectedLayerIds.length} Selected
+        </span>
       </div>
     </div>
   );

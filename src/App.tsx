@@ -7,6 +7,7 @@ import { LayerPanel } from '@/components/panels/LayerPanel';
 import { PropertiesPanel } from '@/components/panels/PropertiesPanel';
 import { TemplatePanel } from '@/components/panels/TemplatePanel';
 import { TopToolbar } from '@/components/toolbar/TopToolbar';
+import { FigmaToolbar } from '@/components/toolbar/FigmaToolbar';
 import { StartScreen } from '@/components/StartScreen';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -128,9 +129,6 @@ function App() {
 
             {/* Main Content */}
             <div className="flex flex-1 overflow-hidden">
-          {/* Tool Panel */}
-          <ToolPanel />
-
           {/* Left Sidebar: Layer Panel */}
           <div
             className={`border-r border-border bg-card flex flex-col ${!isDraggingLeft ? 'transition-all duration-200' : ''} ${
@@ -210,6 +208,7 @@ function App() {
             </div>
           </div>
         </div>
+        <FigmaToolbar />
       </>
     )}
   </div>
