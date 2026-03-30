@@ -66,6 +66,38 @@ Ensure you have [Node.js](https://nodejs.org/) installed, then follow these step
 
 ---
 
+## 🐳 Docker & Podman Integration
+
+Stampify includes a multi-stage `Dockerfile` optimized for `oven/bun` and deployed behind a lightweight `nginx:alpine` server. You can use either **Docker** or **Podman** to build and run the application.
+
+### Using Docker
+
+1. **Build the image:**
+   ```bash
+   docker build -t stampify:latest .
+   ```
+2. **Run the container:**
+   ```bash
+   docker run -d -p 8080:80 --name stampify-app stampify:latest
+   ```
+   The application will be accessible at `http://localhost:8080`.
+
+### Using Podman
+
+Podman is a daemonless, rootless alternative to Docker. The commands are natively compatible:
+
+1. **Build the image:**
+   ```bash
+   podman build -t stampify:latest .
+   ```
+2. **Run the container:**
+   ```bash
+   podman run -d -p 8080:80 --name stampify-app stampify:latest
+   ```
+   The application will be accessible at `http://localhost:8080`.
+
+---
+
 ## 🛠 Architecture & Tech Stack
 
 Stampify enforces a strict, decoupled component foundation. 
