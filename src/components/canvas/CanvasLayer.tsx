@@ -1,9 +1,81 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useRef, useEffect, useState } from 'react';
 import { Image as KonvaImage, Text as KonvaText, Rect, Ellipse, Line, Group, Arrow } from 'react-konva';
 import Konva from 'konva';
 import type { Layer, ImageLayer, TextLayer, ShapeLayer, WatermarkLayer, EmojiLayer } from '@/types';
 import { useCanvasStore } from '@/store/canvasStore';
 import { loadImage } from '@/utils/imageUtils';
+import { getSnappingEdges, getSnappedPosition } from '@/utils/snapping';
+
+function useLayerDrag(layerId: string) {
+  const dragStartPosRef = useRef({ x: 0, y: 0 });
+  const snappingEdgesRef = useRef<any>(null);
+  
+  const onDragStart = (e: Konva.KonvaEventObject<DragEvent>) => {
+    dragStartPosRef.current = e.target.absolutePosition();
+    const state = useCanvasStore.getState();
+    if (e.evt.altKey) {
+      state.duplicateLayerExact(layerId);
+    }
+    snappingEdgesRef.current = getSnappingEdges(state.document, layerId, state.showGrid);
+    state.saveToHistory();
+  };
+
+  // eslint-disable-next-line react-hooks/unsupported-syntax
+  const dragBoundFunc = function(this: Konva.Node, pos: { x: number; y: number }) {
+    // In React-Konva the second argument is the mouse event, but types don't always reflect it
+    const e = window.event as MouseEvent | undefined;
+    let newPos = { ...pos };
+    if (e?.shiftKey) {
+      const start = dragStartPosRef.current;
+      const dx = Math.abs(pos.x - start.x);
+      const dy = Math.abs(pos.y - start.y);
+      newPos = dx > dy ? { x: pos.x, y: start.y } : { x: start.x, y: pos.y };
+      useCanvasStore.getState().setSnapLines([]); // clear snaps if shifting
+      return newPos;
+    }
+
+    if (snappingEdgesRef.current) {
+      const stage = this.getStage();
+      if (!stage) return newPos;
+      const zoom = stage.scaleX();
+      const stagePos = stage.position();
+      
+      const docPos = {
+        x: (newPos.x - stagePos.x) / zoom,
+        y: (newPos.y - stagePos.y) / zoom,
+      };
+
+      const box = {
+        width: this.width() * Math.abs(this.scaleX()),
+        height: this.height() * Math.abs(this.scaleY()),
+      };
+
+      const { position: snappedDocPos, snapLines } = getSnappedPosition(
+        docPos,
+        box,
+        snappingEdgesRef.current,
+        zoom
+      );
+
+      useCanvasStore.getState().setSnapLines(snapLines);
+
+      newPos = {
+        x: snappedDocPos.x * zoom + stagePos.x,
+        y: snappedDocPos.y * zoom + stagePos.y,
+      };
+    }
+    return newPos;
+  };
+  
+  const onDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    const store = useCanvasStore.getState();
+    store.updateLayer(layerId, { x: e.target.x(), y: e.target.y() });
+    store.setSnapLines([]); // ensure snap lines vanish upon drop
+  };
+
+  return { onDragStart, dragBoundFunc, onDragEnd, dragStartPosRef };
+}
 
 interface CanvasLayerProps {
   layer: Layer;
@@ -12,7 +84,8 @@ interface CanvasLayerProps {
 const ImageLayerRenderer: React.FC<{ layer: ImageLayer }> = ({ layer }) => {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const imageRef = useRef<Konva.Image>(null);
-  const { setSelectedLayers, selectedLayerIds, updateLayer, saveToHistory, activeTool } = useCanvasStore();
+  const { setSelectedLayers, selectedLayerIds, updateLayer, activeTool } = useCanvasStore();
+  const { onDragStart, dragBoundFunc, onDragEnd } = useLayerDrag(layer.id);
 
   useEffect(() => {
     if (layer.src && layer.src !== '__IMAGE_PLACEHOLDER__') {
@@ -23,6 +96,8 @@ const ImageLayerRenderer: React.FC<{ layer: ImageLayer }> = ({ layer }) => {
   useEffect(() => {
     if (!imageRef.current || !image) return;
     const node = imageRef.current;
+
+    node.clearCache();
 
     // Build filter pipeline
     const filters: (typeof Konva.Filters.Brighten)[] = [];
@@ -43,7 +118,7 @@ const ImageLayerRenderer: React.FC<{ layer: ImageLayer }> = ({ layer }) => {
       node.hue(layer.filters.hue);
     }
     node.cache();
-  }, [image, layer.filters]);
+  }, [image, layer.filters, layer.width, layer.height]);
 
   if (layer.src === '__IMAGE_PLACEHOLDER__') {
     return (
@@ -64,6 +139,11 @@ const ImageLayerRenderer: React.FC<{ layer: ImageLayer }> = ({ layer }) => {
             setSelectedLayers([layer.id]);
           }
         }}
+        onDragStart={(e) => {
+          onDragStart(e);
+        }}
+        dragBoundFunc={dragBoundFunc as any}
+        onDragEnd={onDragEnd}
       >
         <Rect
           width={layer.width}
@@ -111,15 +191,14 @@ const ImageLayerRenderer: React.FC<{ layer: ImageLayer }> = ({ layer }) => {
           setSelectedLayers([layer.id]);
         }
       }}
-      onDragStart={() => {
+      onDragStart={(e) => {
         if (!selectedLayerIds.includes(layer.id)) {
           setSelectedLayers([layer.id]);
         }
-        saveToHistory();
+        onDragStart(e);
       }}
-      onDragEnd={(e) => {
-        updateLayer(layer.id, { x: e.target.x(), y: e.target.y() });
-      }}
+      dragBoundFunc={dragBoundFunc as any}
+      onDragEnd={onDragEnd}
       onTransformEnd={(e) => {
         const node = e.target;
         updateLayer(layer.id, {
@@ -139,6 +218,7 @@ const ImageLayerRenderer: React.FC<{ layer: ImageLayer }> = ({ layer }) => {
 const TextLayerRenderer: React.FC<{ layer: TextLayer }> = ({ layer }) => {
   const { setSelectedLayers, updateLayer, saveToHistory, activeTool } = useCanvasStore();
   const textRef = useRef<Konva.Text>(null);
+  const { onDragStart, dragBoundFunc, onDragEnd } = useLayerDrag(layer.id);
 
   const handleDblClick = () => {
     const node = textRef.current;
@@ -225,10 +305,12 @@ const TextLayerRenderer: React.FC<{ layer: TextLayer }> = ({ layer }) => {
         }
       }}
       onDblClick={handleDblClick}
-      onDragStart={() => saveToHistory()}
-      onDragEnd={(e) => {
-        updateLayer(layer.id, { x: e.target.x(), y: e.target.y() });
+      onDragStart={(e) => {
+        onDragStart(e);
+        saveToHistory();
       }}
+      dragBoundFunc={dragBoundFunc as any}
+      onDragEnd={onDragEnd}
       onTransformEnd={(e) => {
         const node = e.target;
         updateLayer(layer.id, {
@@ -247,7 +329,8 @@ const TextLayerRenderer: React.FC<{ layer: TextLayer }> = ({ layer }) => {
 };
 
 const ShapeLayerRenderer: React.FC<{ layer: ShapeLayer }> = ({ layer }) => {
-  const { setSelectedLayers, updateLayer, saveToHistory, activeTool } = useCanvasStore();
+  const { setSelectedLayers, updateLayer, activeTool } = useCanvasStore();
+  const { onDragStart, dragBoundFunc, onDragEnd } = useLayerDrag(layer.id);
 
   const commonProps = {
     id: layer.id,
@@ -268,10 +351,9 @@ const ShapeLayerRenderer: React.FC<{ layer: ShapeLayer }> = ({ layer }) => {
         setSelectedLayers([layer.id]);
       }
     },
-    onDragStart: () => saveToHistory(),
-    onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
-      updateLayer(layer.id, { x: e.target.x(), y: e.target.y() });
-    },
+    onDragStart,
+    dragBoundFunc: dragBoundFunc as any,
+    onDragEnd,
     onTransformEnd: (e: Konva.KonvaEventObject<Event>) => {
       const node = e.target;
       updateLayer(layer.id, {
@@ -358,6 +440,7 @@ const WatermarkLayerRenderer: React.FC<{ layer: WatermarkLayer }> = ({ layer }) 
   const { setSelectedLayers, updateLayer, saveToHistory, activeTool } = useCanvasStore();
   const doc = useCanvasStore((s) => s.document);
   const [patternImage, setPatternImage] = useState<HTMLCanvasElement | null>(null);
+  const { onDragStart, dragBoundFunc, onDragEnd } = useLayerDrag(layer.id);
 
   useEffect(() => {
     const canvas = document.createElement('canvas');
@@ -376,13 +459,13 @@ const WatermarkLayerRenderer: React.FC<{ layer: WatermarkLayer }> = ({ layer }) 
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(layer.text || 'Watermark', layer.width / 2, layer.height / 2);
-      setPatternImage(canvas);
+      setTimeout(() => setPatternImage(canvas), 0);
     } else if (layer.watermarkType === 'image' && layer.src) {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         ctx.drawImage(img, 0, 0, layer.width, layer.height);
-        setPatternImage(canvas);
+        setTimeout(() => setPatternImage(canvas), 0);
       };
       img.src = layer.src;
     }
@@ -443,11 +526,13 @@ const WatermarkLayerRenderer: React.FC<{ layer: WatermarkLayer }> = ({ layer }) 
           setSelectedLayers([layer.id]);
         }
       }}
-      onDragStart={() => saveToHistory()}
+      onDragStart={(e) => {
+        onDragStart(e);
+        saveToHistory();
+      }}
+      dragBoundFunc={dragBoundFunc as any}
       onDragEnd={(e) => {
-        if (layer.position === 'free') {
-          updateLayer(layer.id, { x: e.target.x(), y: e.target.y() });
-        }
+        if (layer.position === 'free') onDragEnd(e);
       }}
       onTransformEnd={(e) => {
         const node = e.target;
@@ -472,7 +557,8 @@ const WatermarkLayerRenderer: React.FC<{ layer: WatermarkLayer }> = ({ layer }) 
 // Removed BlurLayerRenderer
 
 const EmojiLayerRenderer: React.FC<{ layer: EmojiLayer }> = ({ layer }) => {
-  const { setSelectedLayers, updateLayer, saveToHistory, activeTool } = useCanvasStore();
+  const { setSelectedLayers, updateLayer, activeTool } = useCanvasStore();
+  const { onDragStart, dragBoundFunc, onDragEnd } = useLayerDrag(layer.id);
 
   return (
     <KonvaText
@@ -497,10 +583,9 @@ const EmojiLayerRenderer: React.FC<{ layer: EmojiLayer }> = ({ layer }) => {
           setSelectedLayers([layer.id]);
         }
       }}
-      onDragStart={() => saveToHistory()}
-      onDragEnd={(e) => {
-        updateLayer(layer.id, { x: e.target.x(), y: e.target.y() });
-      }}
+      onDragStart={onDragStart}
+      dragBoundFunc={dragBoundFunc}
+      onDragEnd={onDragEnd}
       onTransformEnd={(e) => {
         const node = e.target;
         // Increase font size according to the vertical scale

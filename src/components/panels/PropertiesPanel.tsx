@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { HexColorPicker } from 'react-colorful';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/select';
 import {
   AlignLeft, AlignCenter, AlignRight, Bold, Italic,
-  AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
 } from 'lucide-react';
@@ -82,11 +81,12 @@ const NumberField: React.FC<{
     <Input
       type="number"
       className="h-7 text-xs w-20"
-      value={value}
+      value={Number.isNaN(value) ? '' : value}
+      onFocus={(e) => e.target.select()}
       min={min}
       max={max}
       step={step}
-      onChange={(e) => onChange(Number(e.target.value))}
+      onChange={(e) => onChange(e.target.value === '' ? 0 : Number(e.target.value))}
     />
   </div>
 );

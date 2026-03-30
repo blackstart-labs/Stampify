@@ -31,6 +31,7 @@ Stampify is a powerful, client-side web application designed for high-performanc
 
 - **Advanced Rendering Engine**: Powered by Konva.js, rendering a robust HTML5 Canvas layered architecture.
 - **Dynamic Layer Management**: Full support for Images, Text overlays, interactive Vector Shapes, Emojis, and auto-tiling Watermarks. 
+- **Professional Mechanics**: Includes Figma-style corner rotation, automatic AABB marquee box selection, snap-to-grid alignment, and dragging guides. 
 - **Native Blend Modes**: Utilize all standard compositing modes (`multiply`, `screen`, `overlay`, `color-burn`, etc.) instantly mapped to your canvas.
 - **Smart Image Filtering**: Apply native non-destructive adjustments (Brightness, Contrast, Saturation, Blur, Sepia, Invert, Hue) completely live.
 - **1-Click Batch Processing**: 

@@ -1,0 +1,34 @@
+
+M:\Projects\Stampify\src\components\StartScreen.tsx
+  8:30  error  'FilePlus' is defined but never used  @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\components\canvas\CanvasStage.tsx
+  34:5  error  'selectedLayerIds' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\components\panels\PropertiesPanel.tsx
+   1:17  error  'useState' is defined but never used                         @typescript-eslint/no-unused-vars
+  16:3   error  'AlignHorizontalDistributeCenter' is defined but never used  @typescript-eslint/no-unused-vars
+  16:36  error  'AlignVerticalDistributeCenter' is defined but never used    @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\components\toolbar\TopToolbar.tsx
+   4:31  error  'Save' is defined but never used              @typescript-eslint/no-unused-vars
+   4:46  error  'ImageIcon' is defined but never used         @typescript-eslint/no-unused-vars
+   5:38  error  'Settings' is defined but never used          @typescript-eslint/no-unused-vars
+  19:10  error  'Switch' is defined but never used            @typescript-eslint/no-unused-vars
+  35:5   error  'setZoom' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  79:14  error  'err' is defined but never used               @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\hooks\useImageImport.ts
+  8:31  error  'hasActiveProject' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\utils\exportUtils.ts
+  3:31  error  'Layer' is defined but never used       @typescript-eslint/no-unused-vars
+  3:38  error  'ImageLayer' is defined but never used  @typescript-eslint/no-unused-vars
+  4:10  error  'loadImage' is defined but never used   @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\utils\snapping.ts
+  1:31  error  'Guide' is defined but never used  @typescript-eslint/no-unused-vars
+  2:8   error  'Konva' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 17 problems (17 errors, 0 warnings)
+

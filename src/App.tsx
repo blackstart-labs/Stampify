@@ -25,22 +25,33 @@ function App() {
 
   const canvasStageRef = useRef<CanvasStageHandle>(null);
   const { document: doc, loadDocument, hasActiveProject } = useCanvasStore();
-  const [showRestore, setShowRestore] = useState(false);
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
-
-  // Check for autosave on mount
-  useEffect(() => {
+  const [showRestore, setShowRestore] = useState(() => {
     const saved = localStorage.getItem(AUTOSAVE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.layers && parsed.layers.length > 0) {
-          setShowRestore(true);
+          return true;
         }
       } catch { /* ignore */ }
     }
-  }, []);
+    return false;
+  });
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+  
+  const [leftWidth, setLeftWidth] = useState(() => {
+    const saved = localStorage.getItem('stampify-left-width');
+    return saved ? parseInt(saved, 10) : 224; // w-56 default
+  });
+  const [rightWidth, setRightWidth] = useState(() => {
+    const saved = localStorage.getItem('stampify-right-width');
+    return saved ? parseInt(saved, 10) : 256; // w-64 default
+  });
+  const [isDraggingLeft, setIsDraggingLeft] = useState(false);
+  const [isDraggingRight, setIsDraggingRight] = useState(false);
+
+
 
   // Autosave every 30 seconds
   useEffect(() => {
@@ -50,6 +61,49 @@ function App() {
     }, AUTOSAVE_INTERVAL);
     return () => clearInterval(interval);
   }, [doc, hasActiveProject]);
+
+  // Persist panel widths
+  useEffect(() => {
+    localStorage.setItem('stampify-left-width', leftWidth.toString());
+  }, [leftWidth]);
+
+  useEffect(() => {
+    localStorage.setItem('stampify-right-width', rightWidth.toString());
+  }, [rightWidth]);
+
+  // Drag listeners
+  useEffect(() => {
+    if (!isDraggingLeft && !isDraggingRight) return;
+    
+    const handlePointerMove = (e: PointerEvent) => {
+      if (isDraggingLeft) {
+        let newWidth = e.clientX - 48; // 48 is w-12 ToolPanel width
+        if (newWidth < 180) newWidth = 180;
+        if (newWidth > 600) newWidth = 600;
+        setLeftWidth(newWidth);
+      }
+      if (isDraggingRight) {
+        let newWidth = window.innerWidth - e.clientX;
+        if (newWidth < 200) newWidth = 200;
+        if (newWidth > 600) newWidth = 600;
+        setRightWidth(newWidth);
+      }
+    };
+    
+    const handlePointerUp = () => {
+      setIsDraggingLeft(false);
+      setIsDraggingRight(false);
+      document.body.style.cursor = '';
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [isDraggingLeft, isDraggingRight]);
 
   const handleRestore = () => {
     const saved = localStorage.getItem(AUTOSAVE_KEY);
@@ -79,9 +133,10 @@ function App() {
 
           {/* Left Sidebar: Layer Panel */}
           <div
-            className={`border-r border-border bg-card flex flex-col transition-all duration-200 ${
-              leftCollapsed ? 'w-0 overflow-hidden' : 'w-56'
+            className={`border-r border-border bg-card flex flex-col ${!isDraggingLeft ? 'transition-all duration-200' : ''} ${
+              leftCollapsed ? 'overflow-hidden' : ''
             }`}
+            style={{ width: leftCollapsed ? 0 : leftWidth }}
           >
             <div className="flex items-center justify-between px-2 py-1.5 border-b border-border">
               <span className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1">
@@ -97,32 +152,55 @@ function App() {
             </div>
           </div>
 
-          {/* Collapse toggle for left */}
-          <button
-            className="w-4 flex items-center justify-center bg-card border-r border-border hover:bg-accent transition-colors"
-            onClick={() => setLeftCollapsed(!leftCollapsed)}
-            aria-label="Toggle left panel"
-          >
-            {leftCollapsed ? <ChevronRight size={10} /> : <ChevronLeft size={10} />}
-          </button>
+          {/* Collapse toggle and resizer for left */}
+          <div className="relative flex items-center bg-card border-r border-border">
+            <button
+              className="w-4 h-8 flex flex-col items-center justify-center bg-card border border-border border-l-0 rounded-r-md hover:bg-accent transition-colors z-10 absolute left-0"
+              onClick={() => setLeftCollapsed(!leftCollapsed)}
+              aria-label="Toggle left panel"
+            >
+              {leftCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+            </button>
+            <div 
+              className="w-1.5 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-20"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                setIsDraggingLeft(true);
+                setLeftCollapsed(false);
+                document.body.style.cursor = 'col-resize';
+              }}
+            />
+          </div>
 
           {/* Canvas Area */}
           <CanvasStage ref={canvasStageRef} />
 
-          {/* Collapse toggle for right */}
-          <button
-            className="w-4 flex items-center justify-center bg-card border-l border-border hover:bg-accent transition-colors"
-            onClick={() => setRightCollapsed(!rightCollapsed)}
-            aria-label="Toggle right panel"
-          >
-            {rightCollapsed ? <ChevronLeft size={10} /> : <ChevronRight size={10} />}
-          </button>
+          {/* Collapse toggle and resizer for right */}
+          <div className="relative flex items-center bg-card border-l border-border">
+            <div 
+              className="w-1.5 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-20"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                setIsDraggingRight(true);
+                setRightCollapsed(false);
+                document.body.style.cursor = 'col-resize';
+              }}
+            />
+            <button
+              className="w-4 h-8 flex flex-col items-center justify-center bg-card border border-border border-r-0 rounded-l-md hover:bg-accent transition-colors z-10 absolute right-0"
+              onClick={() => setRightCollapsed(!rightCollapsed)}
+              aria-label="Toggle right panel"
+            >
+              {rightCollapsed ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
+            </button>
+          </div>
 
           {/* Right Sidebar: Properties Panel */}
           <div
-            className={`border-l border-border bg-card transition-all duration-200 ${
-              rightCollapsed ? 'w-0 overflow-hidden' : 'w-64'
+            className={`bg-card ${!isDraggingRight ? 'transition-all duration-200' : ''} ${
+              rightCollapsed ? 'overflow-hidden' : ''
             }`}
+            style={{ width: rightCollapsed ? 0 : rightWidth }}
           >
             <div className="flex items-center px-2 py-1.5 border-b border-border">
               <span className="text-xs font-semibold uppercase text-muted-foreground">Properties</span>

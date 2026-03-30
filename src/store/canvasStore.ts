@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
+import type { SnapLine } from '@/utils/snapping';
 import type {
   CanvasDocument,
   Layer,
   ExportSettings,
   ToolType,
   ShapeType,
+  Guide,
 } from '@/types';
 
 import type { Template } from '@/types';
@@ -32,8 +34,10 @@ interface CanvasState {
   fitToScreenTrigger: number;
   hasActiveProject: boolean;
   pendingBatchJob: PendingBatchJob | null;
+  snapLines: SnapLine[];
 
   // Actions
+  setSnapLines: (lines: SnapLine[]) => void;
   setPendingBatchJob: (job: PendingBatchJob | null) => void;
   initFromImage: (src: string, width: number, height: number, name: string) => void;
   triggerFitToScreen: () => void;
@@ -42,6 +46,7 @@ interface CanvasState {
   updateLayer: (id: string, updates: Partial<Layer>) => void;
   reorderLayers: (fromIndex: number, toIndex: number) => void;
   duplicateLayer: (id: string) => void;
+  duplicateLayerExact: (id: string) => void;
   setSelectedLayers: (ids: string[]) => void;
   toggleLayerSelection: (id: string) => void;
   setActiveTool: (tool: ToolType) => void;
@@ -57,6 +62,11 @@ interface CanvasState {
   setDocumentName: (name: string) => void;
   setIsPanning: (val: boolean) => void;
   setShowGrid: (val: boolean) => void;
+  setShowRulers: (val: boolean) => void;
+  // Guides
+  addGuide: (guide: Guide) => void;
+  updateGuide: (id: string, position: number) => void;
+  removeGuide: (id: string) => void;
   moveLayerUp: (id: string) => void;
   moveLayerDown: (id: string) => void;
   moveLayerToTop: (id: string) => void;
@@ -71,6 +81,7 @@ function createDefaultDocument(): CanvasDocument {
     height: 1080,
     background: '#ffffff',
     layers: [],
+    guides: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -82,6 +93,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   document: createDefaultDocument(),
   hasActiveProject: false,
   pendingBatchJob: null,
+  snapLines: [],
   selectedLayerIds: [],
   activeTool: 'select',
   activeShapeType: 'rectangle',
@@ -98,6 +110,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   showRulers: false,
   isPanning: false,
   fitToScreenTrigger: 0,
+
+  setSnapLines: (lines) => set({ snapLines: lines }),
 
   setPendingBatchJob: (job) => set({ pendingBatchJob: job }),
 
@@ -174,6 +188,33 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       },
       selectedLayerIds: [newLayer.id],
     }));
+  },
+
+  duplicateLayerExact: (id: string) => {
+    const state = get();
+    const layer = state.document.layers.find((l) => l.id === id);
+    if (!layer) return;
+    state.saveToHistory();
+    const newLayer: Layer = {
+      ...JSON.parse(JSON.stringify(layer)),
+      id: uuidv4(),
+      name: `${layer.name} (Alt-copy)`,
+      x: layer.x,
+      y: layer.y,
+    };
+    set((s) => {
+      const index = s.document.layers.findIndex((l) => l.id === id);
+      const newLayers = [...s.document.layers];
+      // Insert duplicate just behind the current layer so the dragged layer stays on top
+      newLayers.splice(index, 0, newLayer);
+      return {
+        document: {
+          ...s.document,
+          layers: newLayers,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    });
   },
 
   setSelectedLayers: (ids: string[]) => set({ selectedLayerIds: ids }),
@@ -316,6 +357,43 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   setIsPanning: (val: boolean) => set({ isPanning: val }),
   setShowGrid: (val: boolean) => set({ showGrid: val }),
+  setShowRulers: (val: boolean) => set({ showRulers: val }),
+
+  addGuide: (guide: Guide) => {
+    const state = get();
+    state.saveToHistory();
+    set((s) => ({
+      document: {
+        ...s.document,
+        guides: [...(s.document.guides || []), guide],
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  },
+
+  updateGuide: (id: string, position: number) => {
+    set((s) => ({
+      document: {
+        ...s.document,
+        guides: (s.document.guides || []).map((g) =>
+          g.id === id ? { ...g, position } : g
+        ),
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  },
+
+  removeGuide: (id: string) => {
+    const state = get();
+    state.saveToHistory();
+    set((s) => ({
+      document: {
+        ...s.document,
+        guides: (s.document.guides || []).filter((g) => g.id !== id),
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  },
 
   moveLayerUp: (id: string) => {
     const state = get();

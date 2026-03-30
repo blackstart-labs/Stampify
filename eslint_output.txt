@@ -1,0 +1,120 @@
+
+M:\Projects\Stampify\src\App.tsx
+  50:11  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+M:\Projects\Stampify\src\App.tsx:50:11
+  48 |         const parsed = JSON.parse(saved);
+  49 |         if (parsed && parsed.layers && parsed.layers.length > 0) {
+> 50 |           setShowRestore(true);
+     |           ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  51 |         }
+  52 |       } catch { /* ignore */ }
+  53 |     }  react-hooks/set-state-in-effect
+
+M:\Projects\Stampify\src\components\StartScreen.tsx
+  8:30  error  'FilePlus' is defined but never used  @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\components\canvas\CanvasLayer.tsx
+   11:35  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+   23:34  warning  Compilation Skipped: `this` is not supported syntax
+
+React Compiler does not support compiling functions that use `this`.
+
+M:\Projects\Stampify\src\components\canvas\CanvasLayer.tsx:23:34
+  21 |   };
+  22 |
+> 23 |   const dragBoundFunc = function(this: Konva.Node, pos: { x: number; y: number }) {
+     |                                  ^^^^^^^^^^^^^^^^ `this` was used here
+  24 |     // In React-Konva the second argument is the mouse event, but types don't always reflect it
+  25 |     const e = window.event as MouseEvent | undefined;
+  26 |     let newPos = { ...pos };                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              react-hooks/unsupported-syntax
+  143:41  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  198:39  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  310:39  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  330:43  error    'saveToHistory' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+  353:37  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  460:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+M:\Projects\Stampify\src\components\canvas\CanvasLayer.tsx:460:7
+  458 |       ctx.textBaseline = 'middle';
+  459 |       ctx.fillText(layer.text || 'Watermark', layer.width / 2, layer.height / 2);
+> 460 |       setPatternImage(canvas);
+      |       ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  461 |     } else if (layer.watermarkType === 'image' && layer.src) {
+  462 |       const img = new Image();
+  463 |       img.crossOrigin = 'anonymous';  react-hooks/set-state-in-effect
+  484:27  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  516:41  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  531:39  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  558:43  error    'saveToHistory' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\components\canvas\CanvasStage.tsx
+  34:5  error  'selectedLayerIds' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\components\panels\PropertiesPanel.tsx
+   1:17  error  'useState' is defined but never used                         @typescript-eslint/no-unused-vars
+  16:3   error  'AlignHorizontalDistributeCenter' is defined but never used  @typescript-eslint/no-unused-vars
+  16:36  error  'AlignVerticalDistributeCenter' is defined but never used    @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\components\panels\TemplatePanel.tsx
+   3:10  error  'Input' is defined but never used                      @typescript-eslint/no-unused-vars
+   4:10  error  'Label' is defined but never used                      @typescript-eslint/no-unused-vars
+   6:10  error  'Separator' is defined but never used                  @typescript-eslint/no-unused-vars
+   8:3   error  'Dialog' is defined but never used                     @typescript-eslint/no-unused-vars
+   8:11  error  'DialogContent' is defined but never used              @typescript-eslint/no-unused-vars
+   8:26  error  'DialogHeader' is defined but never used               @typescript-eslint/no-unused-vars
+   8:40  error  'DialogTitle' is defined but never used                @typescript-eslint/no-unused-vars
+   8:53  error  'DialogFooter' is defined but never used               @typescript-eslint/no-unused-vars
+   8:67  error  'DialogDescription' is defined but never used          @typescript-eslint/no-unused-vars
+  17:25  error  'exportSettings' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  19:10  error  'showImportDialog' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\components\panels\ToolPanel.tsx
+   5:3   error  'Droplets' is defined but never used                     @typescript-eslint/no-unused-vars
+   6:21  error  'ImageIcon' is defined but never used                    @typescript-eslint/no-unused-vars
+  33:32  error  'activeShapeType' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  33:49  error  'setActiveShapeType' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\components\toolbar\TopToolbar.tsx
+    3:31  error    'Save' is defined but never used                                                                                                                     @typescript-eslint/no-unused-vars
+    3:37  error    'Image' is defined but never used                                                                                                                    @typescript-eslint/no-unused-vars
+    4:38  error    'Settings' is defined but never used                                                                                                                 @typescript-eslint/no-unused-vars
+   18:10  error    'Switch' is defined but never used                                                                                                                   @typescript-eslint/no-unused-vars
+   34:5   error    'setZoom' is assigned a value but never used                                                                                                         @typescript-eslint/no-unused-vars
+   78:14  error    'err' is defined but never used                                                                                                                      @typescript-eslint/no-unused-vars
+   86:38  error    Unexpected any. Specify a different type                                                                                                             @typescript-eslint/no-explicit-any
+  144:38  error    Unexpected any. Specify a different type                                                                                                             @typescript-eslint/no-explicit-any
+  229:6   warning  React Hook React.useEffect has missing dependencies: 'executeBatchJob' and 'setPendingBatchJob'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+M:\Projects\Stampify\src\components\ui\badge.tsx
+  36:17  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+M:\Projects\Stampify\src\components\ui\button.tsx
+  56:18  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+M:\Projects\Stampify\src\hooks\useImageImport.ts
+  8:31  error  'hasActiveProject' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\utils\exportUtils.ts
+  3:31  error  'Layer' is defined but never used       @typescript-eslint/no-unused-vars
+  3:38  error  'ImageLayer' is defined but never used  @typescript-eslint/no-unused-vars
+  4:10  error  'loadImage' is defined but never used   @typescript-eslint/no-unused-vars
+
+M:\Projects\Stampify\src\utils\snapping.ts
+  1:31  error  'Guide' is defined but never used  @typescript-eslint/no-unused-vars
+  2:8   error  'Konva' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 50 problems (48 errors, 2 warnings)
+

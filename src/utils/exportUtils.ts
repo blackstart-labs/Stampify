@@ -1,7 +1,6 @@
 import Konva from 'konva';
 import { saveAs } from 'file-saver';
-import type { ExportSettings, Layer, ImageLayer } from '@/types';
-import { loadImage } from './imageUtils';
+import type { ExportSettings } from '@/types';
 
 export function exportStage(
   stage: Konva.Stage,

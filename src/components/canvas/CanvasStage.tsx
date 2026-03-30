@@ -1,11 +1,14 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { Stage, Layer, Rect, Group } from 'react-konva';
+import { Stage, Layer, Rect, Group, Line } from 'react-konva';
 import Konva from 'konva';
 import { useCanvasStore } from '@/store/canvasStore';
 import { CanvasLayer } from './CanvasLayer';
 import { SelectionTransformer } from './SelectionTransformer';
+import { Ruler } from './Ruler';
+import { SnapLinesOverlay } from './SnapLinesOverlay';
 import { useDropzone } from 'react-dropzone';
 import { useImageImport } from '@/hooks/useImageImport';
+import { v4 as uuidv4 } from 'uuid';
 
 const CHECKERBOARD_SIZE = 16;
 
@@ -28,10 +31,13 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
     document: doc,
     zoom,
     setZoom,
-    selectedLayerIds,
     setSelectedLayers,
     activeTool,
     showGrid,
+    showRulers,
+    addGuide,
+    updateGuide,
+    removeGuide,
     setIsPanning,
     fitToScreenTrigger,
   } = useCanvasStore();
@@ -140,7 +146,24 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
   }, [measureCount]);
 
   // Reset auto-fit when document changes (new project / load document)
+  const [selectionBox, setSelectionBox] = useState({
+    active: false,
+    startX: 0,
+    startY: 0,
+    endX: 0,
+    endY: 0,
+  });
+
   const docIdRef = useRef(doc.id);
+  
+  const manualRotateRef = useRef<{
+    active: boolean;
+    nodes: Array<{ id: string; x: number; y: number; rotation: number }>;
+    center: { x: number; y: number };
+    startAngleRaw: number;
+  }>({ active: false, nodes: [], center: { x: 0, y: 0 }, startAngleRaw: 0 });
+  const [isHoveringRotate, setIsHoveringRotate] = useState(false);
+
   useEffect(() => {
     if (docIdRef.current !== doc.id) {
       docIdRef.current = doc.id;
@@ -209,6 +232,27 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
         return;
       }
 
+      if (isHoveringRotate && activeTool === 'select') {
+        e.evt.preventDefault();
+        const stage = stageRef.current;
+        const pointer = stage?.getPointerPosition();
+        if (stage && pointer) {
+          const tr = stage.findOne('Transformer') as Konva.Transformer | undefined;
+          if (tr && tr.nodes().length > 0) {
+            const nodes = tr.nodes();
+            const transform = tr.getAbsoluteTransform();
+            const center = transform.point({ x: tr.width() / 2, y: tr.height() / 2 });
+            manualRotateRef.current = {
+              active: true,
+              nodes: nodes.map((n) => ({ id: n.id(), x: n.x(), y: n.y(), rotation: n.rotation() })),
+              center,
+              startAngleRaw: Math.atan2(pointer.y - center.y, pointer.x - center.x) * (180 / Math.PI),
+            };
+            return;
+          }
+        }
+      }
+
       // Click on empty area -> deselect
       const target = e.target;
       const clickedOnEmpty =
@@ -219,44 +263,235 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
         target.name() === 'grid-line';
 
       if (clickedOnEmpty && activeTool === 'select') {
+        // Only deselect if selection box is just clicked (handled via mouseup) or we drag-start new box
         setSelectedLayers([]);
+        const stage = stageRef.current;
+        const pointer = stage?.getPointerPosition();
+        if (pointer && stage) {
+          const docX = (pointer.x - stagePos.x) / zoom;
+          const docY = (pointer.y - stagePos.y) / zoom;
+          setSelectionBox({
+            active: true,
+            startX: docX,
+            startY: docY,
+            endX: docX,
+            endY: docY,
+          });
+        }
       }
     },
-    [activeTool, setSelectedLayers, setIsPanning]
+    [activeTool, setSelectedLayers, setIsPanning, stagePos, zoom, isHoveringRotate]
   );
 
   const handleMouseMove = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
-      if (!isPanningRef.current) return;
-      const dx = e.evt.clientX - lastPointerPos.current.x;
-      const dy = e.evt.clientY - lastPointerPos.current.y;
-      lastPointerPos.current = { x: e.evt.clientX, y: e.evt.clientY };
-      setStagePos((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      if (manualRotateRef.current.active) {
+        const state = manualRotateRef.current;
+        const stage = stageRef.current;
+        const pointer = stage?.getPointerPosition();
+        if (!pointer || !stage) return;
+
+        const currentAngleRaw = Math.atan2(pointer.y - state.center.y, pointer.x - state.center.x) * (180 / Math.PI);
+        let delta = currentAngleRaw - state.startAngleRaw;
+
+        if (e.evt.shiftKey) {
+          delta = Math.round(delta / 45) * 45;
+        }
+
+        const rad = (delta * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        const centerDoc = {
+          x: (state.center.x - stagePos.x) / zoom,
+          y: (state.center.y - stagePos.y) / zoom,
+        };
+
+        state.nodes.forEach((nData) => {
+          const node = stage.findOne(`#${nData.id}`);
+          if (node) {
+            const dx = nData.x - centerDoc.x;
+            const dy = nData.y - centerDoc.y;
+            const newX = centerDoc.x + dx * cos - dy * sin;
+            const newY = centerDoc.y + dx * sin + dy * cos;
+            node.x(newX);
+            node.y(newY);
+            node.rotation(nData.rotation + delta);
+          }
+        });
+
+        const tr = stage.findOne('Transformer');
+        if (tr) tr.getLayer()?.batchDraw();
+        return;
+      }
+
+      if (isPanningRef.current) {
+        const dx = e.evt.clientX - lastPointerPos.current.x;
+        const dy = e.evt.clientY - lastPointerPos.current.y;
+        lastPointerPos.current = { x: e.evt.clientX, y: e.evt.clientY };
+        setStagePos((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      } else if (selectionBox.active) {
+        const stage = stageRef.current;
+        const pointer = stage?.getPointerPosition();
+        if (pointer) {
+          const docX = (pointer.x - stagePos.x) / zoom;
+          const docY = (pointer.y - stagePos.y) / zoom;
+          setSelectionBox((prev) => ({
+            ...prev,
+            endX: docX,
+            endY: docY,
+          }));
+        }
+      } else if (activeTool === 'select' && doc.layers.length > 0) {
+        const stage = stageRef.current;
+        const pointer = stage?.getPointerPosition();
+        let hovering = false;
+        if (pointer && stage) {
+          const tr = stage.findOne('Transformer') as Konva.Transformer | undefined;
+          if (tr && tr.isVisible() && tr.nodes().length > 0) {
+            const transform = tr.getAbsoluteTransform().copy();
+            transform.invert();
+            const p = transform.point(pointer);
+            const w = tr.width();
+            const h = tr.height();
+            const pad = 24;
+
+            const dx = p.x < 0 ? -p.x : p.x > w ? p.x - w : 0;
+            const dy = p.y < 0 ? -p.y : p.y > h ? p.y - h : 0;
+
+            if (dx > 0 && dy > 0 && dx < pad && dy < pad) {
+              hovering = true;
+            }
+          }
+        }
+        if (isHoveringRotate !== hovering) {
+          setIsHoveringRotate(hovering);
+        }
+      }
     },
-    []
+    [selectionBox.active, stagePos, zoom, activeTool, doc.layers.length, isHoveringRotate]
   );
 
   const handleMouseUp = useCallback(() => {
+    if (manualRotateRef.current.active) {
+      manualRotateRef.current.active = false;
+      const state = manualRotateRef.current;
+      const stage = stageRef.current;
+      useCanvasStore.getState().saveToHistory();
+
+      state.nodes.forEach((nData) => {
+        const node = stage?.findOne(`#${nData.id}`);
+        if (node) {
+          useCanvasStore.getState().updateLayer(nData.id, {
+            x: node.x(),
+            y: node.y(),
+            rotation: node.rotation(),
+          });
+        }
+      });
+      return;
+    }
+
     if (isPanningRef.current) {
       isPanningRef.current = false;
       setIsPanning(false);
     }
-  }, [setIsPanning]);
+    
+    if (selectionBox.active) {
+      const minX = Math.min(selectionBox.startX, selectionBox.endX);
+      const minY = Math.min(selectionBox.startY, selectionBox.endY);
+      const maxX = Math.max(selectionBox.startX, selectionBox.endX);
+      const maxY = Math.max(selectionBox.startY, selectionBox.endY);
+      
+      const selectedIds: string[] = [];
+      const thresholdArea = 10; // If they just clicked (0 width), skip marquee logic.
+      const boxArea = (maxX - minX) * (maxY - minY);
+
+      if (boxArea > thresholdArea) {
+        for (const layer of doc.layers) {
+          // Avoid overlapping tests for locked items
+          if (layer.locked) continue;
+          
+          const ldx = layer.width || 0;
+          const ldy = layer.height || 0;
+          
+          // Fast AABB intersection
+          const overlap = 
+            maxX > layer.x && 
+            minX < (layer.x + ldx) &&
+            maxY > layer.y && 
+            minY < (layer.y + ldy);
+            
+          if (overlap) {
+            selectedIds.push(layer.id);
+          }
+        }
+        setSelectedLayers(selectedIds);
+      }
+      setSelectionBox((prev) => ({ ...prev, active: false }));
+    }
+  }, [selectionBox, doc.layers, setSelectedLayers, setIsPanning]);
 
 
+
+  const [draggingNewGuide, setDraggingNewGuide] = useState<{ orientation: 'horizontal' | 'vertical', position: number } | null>(null);
+
+  const handleRulerPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>, orientation: 'horizontal' | 'vertical') => {
+    e.preventDefault();
+    const isH = orientation === 'horizontal';
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const screenPos = isH ? e.clientY - rect.top : e.clientX - rect.left;
+    const docPos = isH ? (screenPos - stagePos.y) / zoom : (screenPos - stagePos.x) / zoom;
+    setDraggingNewGuide({ orientation, position: docPos });
+  }, [stagePos, zoom]);
+
+  useEffect(() => {
+    if (!draggingNewGuide) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const isH = draggingNewGuide.orientation === 'horizontal';
+      const screenPos = isH ? e.clientY - rect.top : e.clientX - rect.left;
+      const docPos = isH ? (screenPos - stagePos.y) / zoom : (screenPos - stagePos.x) / zoom;
+      setDraggingNewGuide(prev => prev ? { ...prev, position: docPos } : null);
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      const container = containerRef.current;
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const isH = draggingNewGuide.orientation === 'horizontal';
+        const screenPos = isH ? e.clientY - rect.top : e.clientX - rect.left;
+        if (screenPos > 24) { // Only add if dropped into canvas area
+          addGuide({ id: uuidv4(), orientation: draggingNewGuide.orientation, position: draggingNewGuide.position });
+        }
+      }
+      setDraggingNewGuide(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [draggingNewGuide, stagePos, zoom, addGuide]);
 
   const isPanning_ = isPanningRef.current || activeTool === 'pan';
-  const cursorStyle = isPanning_
-    ? 'grab'
-    : activeTool === 'text'
-    ? 'text'
-    : 'default';
+  let cursorStyle = isPanning_ ? 'grab' : activeTool === 'text' ? 'text' : 'default';
+  if (isPanning_) cursorStyle = 'grabbing';
+  else if (activeTool === 'shape') cursorStyle = 'crosshair';
+  else if (isHoveringRotate) cursorStyle = 'alias';
+  if (selectionBox.active) cursorStyle = 'crosshair';
 
   return (
     <div
       {...dropzoneProps}
       ref={mergedRef}
-      className="relative flex-1 overflow-hidden bg-[#1a1a2e]"
+      className="relative flex-1 overflow-hidden bg-[#141414]"
       style={{ cursor: cursorStyle }}
     >
       <input {...getInputProps()} />
@@ -334,6 +569,11 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
               />
             )}
 
+            {/* Render layers */}
+            {doc.layers.map((layer) => (
+              <CanvasLayer key={layer.id} layer={layer} />
+            ))}
+
             {/* Grid overlay */}
             {showGrid && (
               <Group listening={false}>
@@ -344,7 +584,7 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
                     y={0}
                     width={1}
                     height={doc.height}
-                    fill="rgba(255,255,255,0.1)"
+                    fill="rgba(128,128,128,0.4)"
                     name="grid-line"
                   />
                 ))}
@@ -355,23 +595,126 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
                     y={i * 50}
                     width={doc.width}
                     height={1}
-                    fill="rgba(255,255,255,0.1)"
+                    fill="rgba(128,128,128,0.4)"
                     name="grid-line"
                   />
                 ))}
               </Group>
             )}
 
-            {/* Render layers */}
-            {doc.layers.map((layer) => (
-              <CanvasLayer key={layer.id} layer={layer} />
-            ))}
+            {/* Selection Box */}
+            {selectionBox.active && (
+              <Rect
+                x={Math.min(selectionBox.startX, selectionBox.endX)}
+                y={Math.min(selectionBox.startY, selectionBox.endY)}
+                width={Math.abs(selectionBox.endX - selectionBox.startX)}
+                height={Math.abs(selectionBox.endY - selectionBox.startY)}
+                fill="rgba(24, 160, 251, 0.15)"
+                stroke="#18a0fb"
+                strokeWidth={1 / zoom}
+                listening={false}
+              />
+            )}
           </Group>
 
           {/* Selection transformer (outside clip so handles are visible) */}
           <SelectionTransformer stageRef={stageRef} />
+
+          {/* Figma-style Snapping Grid Overlay */}
+          <SnapLinesOverlay />
+
+          {/* Guides */}
+          {showRulers && (
+            <Group>
+              {doc.guides?.map(guide => (
+                <Line
+                  key={guide.id}
+                  points={
+                    guide.orientation === 'horizontal'
+                      ? [-100000, guide.position, 100000, guide.position]
+                      : [guide.position, -100000, guide.position, 100000]
+                  }
+                  stroke="rgba(0, 255, 255, 0.8)"
+                  strokeWidth={1 / zoom}
+                  hitStrokeWidth={15 / zoom}
+                  draggable={activeTool === 'select'}
+                  dragBoundFunc={(pos) => {
+                    return guide.orientation === 'horizontal' 
+                      ? { x: 0, y: pos.y } 
+                      : { x: pos.x, y: 0 };
+                  }}
+                  onDragEnd={(e) => {
+                    const node = e.target;
+                    const newPos = guide.orientation === 'horizontal' ? node.y() : node.x();
+                    const screenPos = guide.orientation === 'horizontal'
+                      ? newPos * zoom + stagePos.y
+                      : newPos * zoom + stagePos.x;
+
+                    if (screenPos < 24) {
+                      removeGuide(guide.id);
+                    } else {
+                      updateGuide(guide.id, newPos);
+                    }
+                    node.position({ x: 0, y: 0 }); // reset absolute position mutation
+                  }}
+                  onMouseEnter={(e) => {
+                    const container = e.target.getStage()?.container();
+                    if (container) {
+                      container.style.cursor = guide.orientation === 'horizontal' ? 'row-resize' : 'col-resize';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    const container = e.target.getStage()?.container();
+                    if (container) {
+                      container.style.cursor = cursorStyle;
+                    }
+                  }}
+                />
+              ))}
+
+              {/* Ghost Guide for dropping */}
+              {draggingNewGuide && (
+                <Line
+                  points={
+                    draggingNewGuide.orientation === 'horizontal'
+                      ? [-100000, draggingNewGuide.position, 100000, draggingNewGuide.position]
+                      : [draggingNewGuide.position, -100000, draggingNewGuide.position, 100000]
+                  }
+                  stroke="rgba(0, 255, 255, 0.8)"
+                  strokeWidth={1 / zoom}
+                  listening={false}
+                />
+              )}
+            </Group>
+          )}
         </Layer>
       </Stage>
+
+      {/* Rulers Overlay */}
+      {showRulers && (
+        <>
+          <Ruler
+            orientation="horizontal"
+            width={containerSize.width}
+            height={24}
+            zoom={zoom}
+            offset={stagePos.x}
+            onPointerDown={handleRulerPointerDown}
+          />
+          <Ruler
+            orientation="vertical"
+            width={24}
+            height={containerSize.height}
+            zoom={zoom}
+            offset={stagePos.y}
+            onPointerDown={handleRulerPointerDown}
+          />
+          {/* Corner Block */}
+          <div
+            className="absolute top-0 left-0 w-6 h-6 z-20 bg-[#1e1e1e] border-r border-b border-[#2e2e2e]"
+          />
+        </>
+      )}
     </div>
   );
 });

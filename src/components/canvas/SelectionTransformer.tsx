@@ -48,17 +48,15 @@ export const SelectionTransformer: React.FC<SelectionTransformerProps> = ({ stag
       anchorCornerRadius={2}
       enabledAnchors={[
         'top-left',
-        'top-center',
         'top-right',
-        'middle-left',
-        'middle-right',
         'bottom-left',
-        'bottom-center',
         'bottom-right',
+        'top-center',
+        'bottom-center',
+        'middle-left',
+        'middle-right'
       ]}
-      rotateEnabled={true}
-      rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
-      rotationSnapTolerance={5}
+      rotateEnabled={false}
     />
   );
 };

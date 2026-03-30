@@ -1,5 +1,11 @@
 export type LayerType = 'image' | 'text' | 'shape' | 'watermark' | 'blur' | 'emoji';
 
+export interface Guide {
+  id: string;
+  orientation: 'horizontal' | 'vertical';
+  position: number;
+}
+
 export type WatermarkPosition =
   | 'top-left' | 'top-center' | 'top-right'
   | 'center-left' | 'center' | 'center-right'
@@ -99,6 +105,7 @@ export interface CanvasDocument {
   height: number;
   background: string;
   layers: Layer[];
+  guides?: Guide[];
   createdAt: string;
   updatedAt: string;
 }

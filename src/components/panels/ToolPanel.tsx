@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import {
   MousePointer2, Type, Square, Circle, Minus, ArrowRight, Triangle,
   Droplets, Hand, Stamp, Smile, ZoomIn, ZoomOut, Maximize,
-  Grid3X3, Image as ImageIcon
+  Grid3X3, Image as ImageIcon, Ruler as RulerIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -31,7 +32,7 @@ const shapes: { id: ShapeType; icon: React.ReactNode; label: string }[] = [
 export const ToolPanel: React.FC = () => {
   const {
     activeTool, setActiveTool, activeShapeType, setActiveShapeType,
-    zoom, setZoom, showGrid, setShowGrid, addLayer, document: doc,
+    zoom, setZoom, showGrid, setShowGrid, showRulers, setShowRulers, addLayer, document: doc,
     triggerFitToScreen
   } = useCanvasStore();
   const [showShapes, setShowShapes] = useState(false);
@@ -264,6 +265,24 @@ export const ToolPanel: React.FC = () => {
         </TooltipTrigger>
         <TooltipContent side="right">
           <p>Toggle Grid</p>
+        </TooltipContent>
+      </Tooltip>
+
+      {/* Rulers toggle */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={showRulers ? 'default' : 'ghost'}
+            size="icon"
+            className="w-9 h-9"
+            onClick={() => setShowRulers(!showRulers)}
+            aria-label="Toggle Rulers"
+          >
+            <RulerIcon size={18} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          <p>Toggle Rulers (Ctrl+R)</p>
         </TooltipContent>
       </Tooltip>
 

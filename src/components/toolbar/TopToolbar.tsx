@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useRef, useState } from 'react';
 import {
-  Download, Upload, FilePlus, Save, Image, Undo2, Redo2,
+  Download, Upload, FilePlus, Save, Image as ImageIcon, Undo2, Redo2,
   Sun, Moon, Link, FileJson, Layers, Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -226,6 +228,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
       }, 500);
       return () => clearTimeout(timer);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingBatchJob, canvasStageRef]);
 
   const handleBatchExport = () => {
@@ -263,6 +266,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ canvasStageRef }) => {
           className="h-7 text-xs w-40 bg-transparent border-none focus-visible:ring-1"
           value={doc.name}
           onChange={(e) => setDocumentName(e.target.value)}
+          onFocus={(e) => e.target.select()}
         />
 
         <Separator orientation="vertical" className="h-6" />

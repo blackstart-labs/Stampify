@@ -20,6 +20,8 @@ export function useKeyboardShortcuts() {
     moveLayerToTop,
     moveLayerToBottom,
     triggerFitToScreen,
+    showRulers,
+    setShowRulers,
   } = useCanvasStore();
 
   const { importFromClipboard } = useImageImport();
@@ -49,6 +51,10 @@ export function useKeyboardShortcuts() {
           case 'y':
             e.preventDefault();
             redo();
+            return;
+          case 'r':
+            e.preventDefault();
+            setShowRulers(!showRulers);
             return;
           case 'd':
             e.preventDefault();
@@ -139,6 +145,6 @@ export function useKeyboardShortcuts() {
     selectedLayerIds, activeTool, undo, redo, removeLayer, duplicateLayer,
     setActiveTool, setSelectedLayers, setZoom, zoom, document.layers,
     moveLayerUp, moveLayerDown, moveLayerToTop, moveLayerToBottom,
-    importFromClipboard, triggerFitToScreen,
+    importFromClipboard, triggerFitToScreen, showRulers, setShowRulers,
   ]);
 }
