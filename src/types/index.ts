@@ -27,6 +27,9 @@ export interface BaseLayer {
   height: number;
   rotation: number;
   blendMode: string;
+  isMask?: boolean;
+  clippedToId?: string;
+  cornerRadius?: number;
 }
 
 export interface ImageLayer extends BaseLayer {
@@ -74,7 +77,6 @@ export interface ShapeLayer extends BaseLayer {
   fill: string;
   stroke: string;
   strokeWidth: number;
-  cornerRadius?: number;
 }
 
 // BlurLayer removed

@@ -169,20 +169,41 @@ const ImageLayerRenderer: React.FC<{ layer: ImageLayer }> = ({ layer }) => {
   if (!image) return null;
 
   return (
-    <KonvaImage
-      ref={imageRef}
+    <Group
       id={layer.id}
       name="layer-node"
-      image={image}
       x={layer.x}
       y={layer.y}
       width={layer.width}
       height={layer.height}
       rotation={layer.rotation}
       opacity={layer.opacity / 100}
-      globalCompositeOperation={(layer.blendMode && layer.blendMode !== 'normal') ? layer.blendMode as GlobalCompositeOperation : 'source-over'}
       draggable={!layer.locked && activeTool === 'select'}
       visible={layer.visible}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      clipFunc={(ctx: any) => {
+         const group = imageRef.current?.getParent();
+         let r = group?.getAttr('dynamicRadius');
+         if (r === undefined) r = layer.cornerRadius || 0;
+         
+         const w = layer.width;
+         const h = layer.height;
+         ctx.beginPath();
+         if (r <= 0) {
+            ctx.rect(0, 0, w, h);
+         } else {
+            ctx.moveTo(r, 0);
+            ctx.lineTo(w - r, 0);
+            ctx.quadraticCurveTo(w, 0, w, r);
+            ctx.lineTo(w, h - r);
+            ctx.quadraticCurveTo(w, h, w - r, h);
+            ctx.lineTo(r, h);
+            ctx.quadraticCurveTo(0, h, 0, h - r);
+            ctx.lineTo(0, r);
+            ctx.quadraticCurveTo(0, 0, r, 0);
+         }
+         ctx.closePath();
+      }}
       onClick={(e) => {
         if (activeTool !== 'select') return;
         if (e.evt.ctrlKey) {
@@ -211,7 +232,15 @@ const ImageLayerRenderer: React.FC<{ layer: ImageLayer }> = ({ layer }) => {
         node.scaleX(1);
         node.scaleY(1);
       }}
-    />
+    >
+      <KonvaImage
+        ref={imageRef}
+        image={image}
+        width={layer.width}
+        height={layer.height}
+        globalCompositeOperation={(layer.blendMode && layer.blendMode !== 'normal') ? layer.blendMode as GlobalCompositeOperation : 'source-over'}
+      />
+    </Group>
   );
 };
 

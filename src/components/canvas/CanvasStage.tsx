@@ -4,6 +4,7 @@ import Konva from 'konva';
 import { useCanvasStore } from '@/store/canvasStore';
 import { CanvasLayer } from './CanvasLayer';
 import { SelectionTransformer } from './SelectionTransformer';
+import { RadiusHandles } from './RadiusHandles';
 import { Ruler } from './Ruler';
 import { SnapLinesOverlay } from './SnapLinesOverlay';
 import { useDropzone } from 'react-dropzone';
@@ -20,7 +21,40 @@ export interface CanvasStageHandle {
 export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const roundedRectClip = useCallback((ctx: any, layer: any) => {
+    ctx.save();
+    ctx.translate(layer.x + layer.width / 2, layer.y + layer.height / 2);
+    ctx.rotate((layer.rotation * Math.PI) / 180);
+    ctx.translate(-(layer.width / 2), -(layer.height / 2));
+
+    const w = layer.width;
+    const h = layer.height;
+    const r = layer.cornerRadius || 0;
+
+    ctx.beginPath();
+    if (layer.type === 'shape' && layer.shapeType === 'circle') {
+      ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    } else if (layer.type === 'shape' && layer.shapeType === 'triangle') {
+      ctx.moveTo(w / 2, 0);
+      ctx.lineTo(w, h);
+      ctx.lineTo(0, h);
+    } else {
+      ctx.moveTo(r, 0);
+      ctx.lineTo(w - r, 0);
+      ctx.quadraticCurveTo(w, 0, w, r);
+      ctx.lineTo(w, h - r);
+      ctx.quadraticCurveTo(w, h, w - r, h);
+      ctx.lineTo(r, h);
+      ctx.quadraticCurveTo(0, h, 0, h - r);
+      ctx.lineTo(0, r);
+      ctx.quadraticCurveTo(0, 0, r, 0);
+    }
+    ctx.closePath();
+    ctx.restore();
+  }, []);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const isPanningRef = useRef(false);
   const lastPointerPos = useRef({ x: 0, y: 0 });
@@ -155,7 +189,7 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
   });
 
   const docIdRef = useRef(doc.id);
-  
+
   const manualRotateRef = useRef<{
     active: boolean;
     nodes: Array<{ id: string; x: number; y: number; rotation: number }>;
@@ -396,13 +430,13 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
       isPanningRef.current = false;
       setIsPanning(false);
     }
-    
+
     if (selectionBox.active) {
       const minX = Math.min(selectionBox.startX, selectionBox.endX);
       const minY = Math.min(selectionBox.startY, selectionBox.endY);
       const maxX = Math.max(selectionBox.startX, selectionBox.endX);
       const maxY = Math.max(selectionBox.startY, selectionBox.endY);
-      
+
       const selectedIds: string[] = [];
       const thresholdArea = 10; // If they just clicked (0 width), skip marquee logic.
       const boxArea = (maxX - minX) * (maxY - minY);
@@ -411,17 +445,17 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
         for (const layer of doc.layers) {
           // Avoid overlapping tests for locked items
           if (layer.locked) continue;
-          
+
           const ldx = layer.width || 0;
           const ldy = layer.height || 0;
-          
+
           // Fast AABB intersection
-          const overlap = 
-            maxX > layer.x && 
+          const overlap =
+            maxX > layer.x &&
             minX < (layer.x + ldx) &&
-            maxY > layer.y && 
+            maxY > layer.y &&
             minY < (layer.y + ldy);
-            
+
           if (overlap) {
             selectedIds.push(layer.id);
           }
@@ -573,10 +607,24 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
               />
             )}
 
-            {/* Render layers */}
-            {doc.layers.map((layer) => (
-              <CanvasLayer key={layer.id} layer={layer} />
-            ))}
+            {/* Render layers (hierarchically resolving masks) */}
+            {doc.layers.filter(l => !l.clippedToId).map((layer) => {
+              if (layer.isMask) {
+                const clippedLayers = doc.layers.filter(l => l.clippedToId === layer.id);
+                return (
+                  <Group
+                    key={`mask-group-${layer.id}`}
+                    clipFunc={(ctx) => roundedRectClip(ctx, layer)}
+                  >
+                    <CanvasLayer key={layer.id} layer={layer} />
+                    {clippedLayers.map(cl => (
+                      <CanvasLayer key={cl.id} layer={cl} />
+                    ))}
+                  </Group>
+                );
+              }
+              return <CanvasLayer key={layer.id} layer={layer} />;
+            })}
 
             {/* Grid overlay */}
             {showGrid && (
@@ -623,6 +671,7 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
 
           {/* Selection transformer (outside clip so handles are visible) */}
           <SelectionTransformer stageRef={stageRef} />
+          <RadiusHandles zoom={zoom} stageRef={stageRef} />
 
           {/* Figma-style Snapping Grid Overlay */}
           <SnapLinesOverlay />
@@ -643,8 +692,8 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
                   hitStrokeWidth={15 / zoom}
                   draggable={activeTool === 'select'}
                   dragBoundFunc={(pos) => {
-                    return guide.orientation === 'horizontal' 
-                      ? { x: 0, y: pos.y } 
+                    return guide.orientation === 'horizontal'
+                      ? { x: 0, y: pos.y }
                       : { x: pos.x, y: 0 };
                   }}
                   onDragEnd={(e) => {

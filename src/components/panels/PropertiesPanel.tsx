@@ -208,6 +208,14 @@ export const PropertiesPanel: React.FC = () => {
               </Button>
             </div>
           </div>
+          <Separator />
+          <div>
+            <Label className="text-xs mb-2 block">Masking</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => useCanvasStore.getState().createClippingMask()}>Create Mask</Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => useCanvasStore.getState().releaseClippingMask()}>Release Mask</Button>
+            </div>
+          </div>
         </div>
       </ScrollArea>
     );
@@ -254,7 +262,13 @@ export const PropertiesPanel: React.FC = () => {
               <NumberField label="H" value={Math.round(layer.height)} onChange={(v) => update({ height: v })} min={1} />
             </div>
 
-            <NumberField label="Rotation" value={Math.round(layer.rotation)} onChange={(v) => update({ rotation: v })} min={-360} max={360} />
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <NumberField label="Rotation" value={Math.round(layer.rotation)} onChange={(v) => update({ rotation: v })} min={-360} max={360} />
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {(layer.type === 'image' || (layer.type === 'shape' && (layer as any).shapeType === 'rectangle')) && (
+                <NumberField label="Radius" value={Math.round(layer.cornerRadius || 0)} onChange={(v) => update({ cornerRadius: v })} min={0} max={Math.min(layer.width, layer.height) / 2} />
+              )}
+            </div>
           </div>
         </div>
 
@@ -267,6 +281,31 @@ export const PropertiesPanel: React.FC = () => {
             <Button variant="outline" size="icon" className="h-8 w-full" onClick={() => updateWithHistory({ y: 0 })} aria-label="Align Top"><AlignStartHorizontal size={14} /></Button>
             <Button variant="outline" size="icon" className="h-8 w-full" onClick={() => updateWithHistory({ y: doc.height / 2 - layer.height / 2 })} aria-label="Center Vertically"><AlignCenterHorizontal size={14} /></Button>
             <Button variant="outline" size="icon" className="h-8 w-full" onClick={() => updateWithHistory({ y: doc.height - layer.height })} aria-label="Align Bottom"><AlignEndHorizontal size={14} /></Button>
+          </div>
+        </div>
+
+        <Separator />
+        
+        {/* Masking Properties */}
+        <div>
+          <Label className="text-xs mb-2 block">Masking</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+               variant={layer.isMask ? "default" : "outline"} 
+               size="sm" className="h-8 text-xs font-normal" 
+               onClick={() => updateWithHistory({ isMask: !layer.isMask })}
+            >
+              {layer.isMask ? 'Is Mask' : 'Make Mask'}
+            </Button>
+            {layer.clippedToId && (
+              <Button 
+                 variant="outline" 
+                 size="sm" className="h-8 text-xs font-normal text-destructive"
+                 onClick={() => updateWithHistory({ clippedToId: undefined })}
+              >
+                Release Clip
+              </Button>
+            )}
           </div>
         </div>
 

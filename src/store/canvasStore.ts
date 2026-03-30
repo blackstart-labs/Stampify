@@ -71,6 +71,8 @@ interface CanvasState {
   moveLayerDown: (id: string) => void;
   moveLayerToTop: (id: string) => void;
   moveLayerToBottom: (id: string) => void;
+  createClippingMask: () => void;
+  releaseClippingMask: () => void;
 }
 
 function createDefaultDocument(): CanvasDocument {
@@ -425,5 +427,60 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     if (idx > 0) {
       state.reorderLayers(idx, 0);
     }
+  },
+
+  createClippingMask: () => {
+    const state = get();
+    if (state.selectedLayerIds.length < 2) return;
+
+    state.saveToHistory();
+    set((s) => {
+      // Find indexes to determine the lowest layer (the mask)
+      const selectedLayersWithIndex = s.selectedLayerIds.map((id) => {
+        return {
+          id,
+          index: s.document.layers.findIndex((l) => l.id === id)
+        };
+      }).sort((a, b) => a.index - b.index);
+
+      const lowestId = selectedLayersWithIndex[0].id;
+      const layersToClip = selectedLayersWithIndex.slice(1).map(l => l.id);
+
+      const updatedLayers = s.document.layers.map((l) => {
+        if (l.id === lowestId) return { ...l, isMask: true };
+        if (layersToClip.includes(l.id)) return { ...l, clippedToId: lowestId };
+        return l;
+      });
+
+      return {
+        document: { ...s.document, layers: updatedLayers, updatedAt: new Date().toISOString() },
+      };
+    });
+  },
+
+  releaseClippingMask: () => {
+    const state = get();
+    if (state.selectedLayerIds.length === 0) return;
+
+    state.saveToHistory();
+    set((s) => {
+      const updatedLayers = s.document.layers.map((l) => {
+        if (s.selectedLayerIds.includes(l.id)) {
+          return { ...l, clippedToId: undefined, isMask: false };
+        }
+        return l;
+      });
+
+      // Also clean up any masks that have no children anymore
+      const stillClippedToIds = updatedLayers.map(l => l.clippedToId).filter(Boolean);
+      const finalLayers = updatedLayers.map(l => {
+        if (l.isMask && !stillClippedToIds.includes(l.id)) return { ...l, isMask: false };
+        return l;
+      });
+
+      return {
+        document: { ...s.document, layers: finalLayers, updatedAt: new Date().toISOString() },
+      };
+    });
   },
 }));
