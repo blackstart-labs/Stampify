@@ -480,11 +480,13 @@ export const CanvasStage = forwardRef<CanvasStageHandle>((_props, ref) => {
     };
   }, [draggingNewGuide, stagePos, zoom, addGuide]);
 
+  const ROTATE_CURSOR = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0px 1px 2px white) drop-shadow(0px -1px 2px white) drop-shadow(1px 0px 2px white) drop-shadow(-1px 0px 2px white)"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>') 10 10, auto`;
+
   const isPanning_ = isPanningRef.current || activeTool === 'pan';
   let cursorStyle = isPanning_ ? 'grab' : activeTool === 'text' ? 'text' : 'default';
   if (isPanning_) cursorStyle = 'grabbing';
   else if (activeTool === 'shape') cursorStyle = 'crosshair';
-  else if (isHoveringRotate) cursorStyle = 'alias';
+  else if (isHoveringRotate) cursorStyle = ROTATE_CURSOR;
   if (selectionBox.active) cursorStyle = 'crosshair';
 
   return (
