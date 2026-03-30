@@ -41,6 +41,7 @@ export function useKeyboardShortcuts() {
       if (e.ctrlKey || e.metaKey) {
         switch (e.key) {
           case 'z':
+          case 'Z':
             e.preventDefault();
             if (e.shiftKey) {
               redo();

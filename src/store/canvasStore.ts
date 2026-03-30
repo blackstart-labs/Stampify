@@ -91,7 +91,7 @@ function createDefaultDocument(): CanvasDocument {
   };
 }
 
-const MAX_HISTORY = 50;
+// const MAX_HISTORY = 50;
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   document: createDefaultDocument(),
@@ -319,9 +319,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set((s) => {
       const newHistory = s.history.slice(0, s.historyIndex + 1);
       newHistory.push(JSON.parse(JSON.stringify(s.document)));
-      if (newHistory.length > MAX_HISTORY) {
-        newHistory.shift();
-      }
       return {
         history: newHistory,
         historyIndex: newHistory.length - 1,
